@@ -1,0 +1,7 @@
+*.mp4
+rec/*
+data/*
+__pycache__
+models/*
+test_videos/*
+*.csv
