@@ -9,10 +9,11 @@ REAL_IDX = 'real_rec.idx'
 
 class MxNetTrainer:
     def __init__(self):
-        self.batch_size = 32
-        self.learning_rate = 1e-3
-        self.epochs = 100
+        self.batch_size = 16
+        self.learning_rate = 1e-4
+        self.epochs = 5
         self.num_classes = 2
+        self.dropout = 0.7
 
         self.ctx = mx.gpu()
 
@@ -46,16 +47,24 @@ class MxNetTrainer:
             self.net.add(gluon.nn.Conv2D(channels=64, kernel_size=5, activation='relu'))
             self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
 
+            self.net.add(gluon.nn.Dropout(self.dropout))
+
             self.net.add(gluon.nn.Conv2D(channels=128, kernel_size=5, activation='relu'))
+            self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
+
+            self.net.add(gluon.nn.Dropout(self.dropout))
+
+            self.net.add(gluon.nn.Conv2D(channels=256, kernel_size=5, activation='relu'))
             self.net.add(gluon.nn.MaxPool2D(pool_size=2, strides=2))
 
             self.net.add(gluon.nn.Flatten())
 
+            self.net.add(gluon.nn.Dense(512, 'relu'))
             self.net.add(gluon.nn.Dense(256, 'relu'))
-            self.net.add(gluon.nn.Dense(64, 'relu'))
+            self.net.add(gluon.nn.Dense(65, 'relu'))
             self.net.add(gluon.nn.Dense(32, 'relu'))
             
-            self.net.add(gluon.nn.Dense(self.num_classes))
+            self.net.add(gluon.nn.Dense(self.num_classes, 'sigmoid'))
 
 
     def evaluate_accuracy(self, data, label):
@@ -87,6 +96,7 @@ class MxNetTrainer:
 
                 data = d.as_in_context(self.ctx)
                 label = l.as_in_context(self.ctx)
+                # label = nd.array(lb, ctx=self.ctx)
 
                 step = data.shape[0]
                 with autograd.record():
@@ -105,7 +115,7 @@ class MxNetTrainer:
                 
 
                 acc = self.evaluate_accuracy(data, label)
-                print("Epoch {:03d} ... Dataset {:03d} ... ".format(e+1, i), "Loss = {:.4f}".format(curr_loss), " Moving Loss = {:.4f}".format(moving_loss), " Accuracy = {:.4f}".format(acc))
+                print("Epoch {:03d} ... Dataset {:04d} ... ".format(e+1, i), "Loss = {:.4f}".format(curr_loss), " Moving Loss = {:.4f}".format(moving_loss), " Accuracy = {:.4f}".format(acc))
 
                 # self.summary_writer.add_histogram(tag='accuracy', values=acc, global_step=e)
 
@@ -115,3 +125,5 @@ class MxNetTrainer:
 
         self.save_path = os.path.join(self.save_path, 'model.params')
         self.net.save_parameters(self.save_path)
+
+        print(self.net)
