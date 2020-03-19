@@ -4,9 +4,13 @@ import numpy as np
 import json
 from tqdm import tqdm
 import multiprocessing
+import threading
 
 DATA = './data'
 METADATA = 'metadata.json'
+
+FAKE = './rec/fake'
+REAL = './rec/real'
 
 def read_frames(d):
     total_frames = 0
@@ -40,15 +44,55 @@ def read_frames(d):
     print('Total fake frames in {}: {}'.format(d, total_fake_frames))
     print('Total real frames in {}: {}'.format(d, total_real_frames))
 
+def util_process(d):
+    with open(os.path.join(DATA, d, METADATA)) as f:
+        meta = json.load(f)
+
+    for k,v in meta.items():
+        label = v['label']
+
+        if label == 'FAKE':
+            original = v['original']
+
+            cap = cv2.VideoCapture(os.path.join(DATA, d, k))
+
+            fake_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+
+            cap.release()
+
+            cap = cv2.VideoCapture(os.path.join(DATA, d, original))
+
+            org_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+
+            cap.release()
+
+            if fake_frames != org_frames:
+                print('{} has {} frames whereas {} has {} frames...'.format(k, fake_frames, original, org_frames))
+
+def remove_images(directory):
+    for d in tqdm(os.listdir(directory)):
+        img = cv2.imread(os.path.join(directory, d))
+
+        if np.all(img) == None or os.stat(os.path.join(directory, d)).st_size == 0:
+            os.remove(os.path.join(directory, d))
+
 if __name__ == '__main__':
-    processes = []
+    t0 = threading.Thread(target=remove_images, args=(FAKE,))
+    t1 = threading.Thread(target=remove_images, args=(REAL,))
 
-    for d in os.listdir(DATA):
-        process = multiprocessing.Process(target=read_frames, args=(d, ))
-        processes.append(process)
-        process.start()
+    t0.start()
+    t1.start()
 
-    for process in processes:
-        process.join()
+    t0.join()
+    t1.join()
+    # processes = []
+
+    # for d in os.listdir(DATA):
+    #     process = multiprocessing.Process(target=util_process, args=(d, ))
+    #     processes.append(process)
+    #     process.start()
+
+    # for process in processes:
+    #     process.join()
 
             

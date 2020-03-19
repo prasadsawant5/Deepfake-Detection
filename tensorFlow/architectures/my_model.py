@@ -26,6 +26,12 @@ class MyModel:
             conv_layer = tf.nn.bias_add(conv_layer, bias)
             conv_layer = tf.nn.relu(conv_layer)
             conv_layer = tf.nn.max_pool(conv_layer, ksize=pool_ksize, strides=pool_strides, padding=padding)
+
+            # conv_layer = tf.keras.layers.Conv2D(
+            #     conv_num_outputs, conv_ksize, strides=conv_strides, padding=padding,
+            #     dilation_rate=(1, 1), activation='relu', use_bias=True,
+            #     kernel_initializer='glorot_uniform', bias_initializer='zeros'
+            # )
             
             return conv_layer
 
@@ -76,15 +82,15 @@ class MyModel:
         cnn = self.conv2d_maxpool(cnn, 64, 'conv1')
         cnn = tf.nn.dropout(cnn, kp, name='dropout0')
 
-        # cnn = self.conv2d_maxpool(cnn, 128, 'conv2')
-        # cnn = self.conv2d_maxpool(cnn, 256, 'conv3')
-        # cnn = tf.nn.dropout(cnn, kp, name='dropout0')
+        cnn = self.conv2d_maxpool(cnn, 128, 'conv2')
+        cnn = self.conv2d_maxpool(cnn, 256, 'conv3')
+        cnn = tf.nn.dropout(cnn, kp, name='dropout2')
 
         # cnn = self.conv2d_maxpool(cnn, 512, 'conv4')
 
         cnn = self.flatten(cnn, 'flatten')
 
-        # cnn = self.fully_conn(cnn, 256, 'fully_conn0')
+        cnn = self.fully_conn(cnn, 256, 'fully_conn0')
         cnn = self.fully_conn(cnn, 64, 'fully_conn1')
         cnn = self.fully_conn(cnn, 32, 'fully_conn2')
         cnn = self.output(cnn)

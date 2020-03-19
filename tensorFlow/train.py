@@ -1,18 +1,22 @@
+import tensorflow as tf
 import cv2
 import numpy as np
 import os
 from tqdm import tqdm
-import tensorflow as tf
 import pandas as pd
 import h5py
 from sklearn.model_selection import train_test_split
 from tensorFlow.architectures.my_model import MyModel
+from random import shuffle
 
 IMG_WIDTH = 384
 IMG_HEIGHT = 384
 
 H5_IMAGES = os.path.join(os.path.dirname(__file__), '../images.h5')
 H5_LABELS = os.path.join(os.path.dirname(__file__), '../labels.h5')
+
+FAKE = os.path.join(os.path.dirname(__file__), '../rec/fake')
+REAL = os.path.join(os.path.dirname(__file__), '../rec/real')
 
 f_id = 0
 
@@ -23,16 +27,34 @@ class TfTrain:
         self.batch_size = 32
         self.kp = 0.7
 
-        if not os.path.isfile(H5_IMAGES) or not os.path.isfile(H5_LABELS):
-            return
+        self.images = None
+        self.labels = None
+
+        self.paths = []
+
+        self.is_h5 = False
+
+        if os.path.isfile(H5_IMAGES) and os.path.isfile(H5_LABELS):
+            self.is_h5 = True
+            self.images = h5py.File(H5_IMAGES, 'r')
+            self.labels = h5py.File(H5_LABELS, 'r')
+        else:
+            fake_dirs = os.listdir(FAKE)
+            real_dirs = os.listdir(REAL)
+
+            if len(fake_dirs) <= len(real_dirs):
+                for i in range(0, len(fake_dirs)):
+                    self.paths.append(os.path.join(FAKE, fake_dirs[i]))
+                    self.paths.append(os.path.join(REAL, real_dirs[i]))
+            else:
+                for i in range(0, len(real_dirs)):
+                    self.paths.append(os.path.join(FAKE, fake_dirs[i]))
+                    self.paths.append(os.path.join(REAL, real_dirs[i]))
 
         if not os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow'))):
             os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow')))
 
         self.save_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow'))
-
-        self.images = h5py.File(H5_IMAGES, 'r')
-        self.labels = h5py.File(H5_LABELS, 'r')
     
     def neural_net_input(self):
         return tf.compat.v1.placeholder(tf.float32, (None, IMG_HEIGHT, IMG_WIDTH, 3), name='X')
@@ -70,13 +92,37 @@ class TfTrain:
                     keep_prob: 1.})
         print('Loss: {:>10.4f}, Val Acc: {:.6f}'.format(loss, valid_acc))
 
+    def one_hot(self, paths, n_classes = 2):
+        arr = np.zeros((len(paths), n_classes))
+
+        for i in range(0, len(paths)):
+            if 'real' in paths[i]:
+                arr[i][0] = 1.
+            else:
+                arr[i][1] = 1.
+        return arr
+
+    def read_images(self, paths):
+        img = []
+
+        for path in paths:
+            image = cv2.imread(path)
+            # if 'fgobmbcami_171.jpeg' in path:
+            if np.all(image) == None:
+                print(image)
+            img.append(cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT)))
+
+        return np.array(img)
+
+
     def train(self):
         # Remove previous weights, bias, inputs, etc..
         tf.compat.v1.reset_default_graph()
 
         tf.compat.v1.disable_eager_execution()
 
-        keys = list(self.images.keys())
+        config = tf.compat.v1.ConfigProto()
+        config.gpu_options.allow_growth = True
 
         # Inputs
         x = self.neural_net_input()
@@ -98,23 +144,46 @@ class TfTrain:
         correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
 
-        with tf.compat.v1.Session() as sess:
+        batch_images = None
+        batch_labels = None
+
+        with tf.compat.v1.Session(config=None) as sess:
             # Initializing the variables
             sess.run(tf.compat.v1.global_variables_initializer())
 
             for epoch in range(0, self.epochs):
                 idx = 0
-                for d_idx in range(0, len(keys)):
-                    img = self.images.get('images_{}'.format(d_idx))
-                    lb = self.labels.get('labels_{}'.format(d_idx))
 
-                    for batch_idx in range(0, img.shape[0] // self.batch_size):
-                        if d_idx == len(keys) - 1 and batch_idx == img.shape[0] // self.batch_size - 1:
-                            batch_images = img[idx : img.shape[0]] / 255.
-                            batch_labels = lb[idx : lb.shape[0]]
+                if self.is_h5:
+                    keys = list(self.images.keys())
+
+                    for d_idx in range(0, len(keys)):
+                        img = self.images.get('images_{}'.format(d_idx))
+                        lb = self.labels.get('labels_{}'.format(d_idx))
+
+                        for batch_idx in range(0, img.shape[0] // self.batch_size):
+                            if d_idx == len(keys) - 1 and batch_idx == img.shape[0] // self.batch_size - 1:
+                                batch_images = img[idx : img.shape[0]] / 255.
+                                batch_labels = lb[idx : lb.shape[0]]
+                            else:
+                                batch_images = img[idx : idx+self.batch_size] / 255.
+                                batch_labels = lb[idx : idx+self.batch_size]
+
+                            _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
+
+                            self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
+                            print('Epoch {:>2}, '.format(epoch + 1), end='')
+                            self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
+
+                            idx += self.batch_size
+                else:
+                    for batch_idx in range(0, len(self.paths) // self.batch_size  + 1):
+                        if batch_idx == len(self.paths) // self.batch_size + 1:
+                            batch_images = self.read_images(self.paths[idx : len(self.paths)]) / 255.
+                            batch_labels = self.one_hot(self.paths[idx : len(self.paths)])
                         else:
-                            batch_images = img[idx : idx+self.batch_size] / 255.
-                            batch_labels = lb[idx : idx+self.batch_size]
+                            batch_images = self.read_images(self.paths[idx : idx+self.batch_size]) / 255.
+                            batch_labels = self.one_hot(self.paths[idx : idx+self.batch_size])
 
                         _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
 
@@ -122,4 +191,5 @@ class TfTrain:
                         print('Epoch {:>2}, '.format(epoch + 1), end='')
                         self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
 
-                        idx += self.batch_size      
+                        idx += self.batch_size
+                break
