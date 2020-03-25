@@ -20,6 +20,7 @@ class MyModel:
         with tf.name_scope(scope_name):
             dimension = x_tensor.get_shape().as_list()
             shape = list((conv_ksize, conv_ksize) + (dimension[-1],) + (conv_num_outputs,))
+            maxpool_shape = list((pool_ksize, pool_ksize) + (dimension[-1],) + (conv_num_outputs,))
             weight = tf.Variable(tf.random.truncated_normal(shape, 0.0, 0.1))
             bias = tf.Variable(tf.zeros(conv_num_outputs))
             conv_layer = tf.nn.conv2d(x_tensor, weight, conv_strides, padding)

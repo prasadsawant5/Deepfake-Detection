@@ -8,6 +8,9 @@ import h5py
 from sklearn.model_selection import train_test_split
 from tensorFlow.architectures.my_model import MyModel
 from random import shuffle
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
 
 IMG_WIDTH = 384
 IMG_HEIGHT = 384
@@ -15,6 +18,7 @@ IMG_HEIGHT = 384
 H5_IMAGES = os.path.join(os.path.dirname(__file__), '../images.h5')
 H5_LABELS = os.path.join(os.path.dirname(__file__), '../labels.h5')
 
+DIR = os.path.join(os.path.dirname(__file__), '../rec')
 FAKE = os.path.join(os.path.dirname(__file__), '../rec/fake')
 REAL = os.path.join(os.path.dirname(__file__), '../rec/real')
 
@@ -121,8 +125,52 @@ class TfTrain:
 
         tf.compat.v1.disable_eager_execution()
 
-        config = tf.compat.v1.ConfigProto()
-        config.gpu_options.allow_growth = True
+        # config = tf.compat.v1.ConfigProto()
+        # config.gpu_options.allow_growth = True
+
+        # gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.333)
+        
+        # total_train = len(os.listdir(FAKE)) + len(os.listdir(REAL))
+        # gpus = tf.config.experimental.list_physical_devices('GPU')
+        # for gpu in gpus:
+        #     tf.config.experimental.set_memory_growth(gpu, True)
+
+        train_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our training data
+        train_data_gen = train_image_generator.flow_from_directory(batch_size=self.batch_size,
+                                                           directory=DIR,
+                                                           shuffle=True,
+                                                           target_size=(IMG_HEIGHT, IMG_WIDTH),
+                                                           class_mode='categorical')
+
+        # model = Sequential([
+        #     Conv2D(32, 3, padding='same', activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH ,3)),
+        #     MaxPooling2D(),
+        #     Conv2D(64, 3, padding='same', activation='relu'),
+        #     MaxPooling2D(),
+        #     Conv2D(128, 3, padding='same', activation='relu'),
+        #     MaxPooling2D(),
+        #     Flatten(),
+        #     Dense(256, activation='relu'),
+        #     Dense(64, activation='relu'),
+        #     Dense(32, activation='relu'),
+        #     Dense(1)
+        # ])
+
+        # model.compile(optimizer='adam',
+        #       loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
+        #       metrics=['accuracy'])
+
+        # history = model.fit_generator(
+        #     train_data_gen,
+        #     steps_per_epoch=total_train // self.batch_size,
+        #     epochs=self.epochs
+        # )
+
+        # acc = history.history['accuracy']
+        # loss=history.history['loss']
+
+        # print('Accuracy: {:.6f}, Loss: {:.6f}'.format(acc, loss))
+
 
         # Inputs
         x = self.neural_net_input()
@@ -136,60 +184,29 @@ class TfTrain:
         # Name logits Tensor, so that is can be loaded from disk after training
         logits = tf.identity(logits, name='logits')
 
-        # Loss and Optimizer
+        # # Loss and Optimizer
         cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
         optimizer = tf.compat.v1.train.AdamOptimizer().minimize(cost)
 
-        # Accuracy
+        # # Accuracy
         correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
-
-        batch_images = None
-        batch_labels = None
 
         with tf.compat.v1.Session(config=None) as sess:
             # Initializing the variables
             sess.run(tf.compat.v1.global_variables_initializer())
+            sess.run(tf.compat.v1.local_variables_initializer())
 
             for epoch in range(0, self.epochs):
-                idx = 0
+                while True:
+                    batch_images, batch_labels = train_data_gen.next()
 
-                if self.is_h5:
-                    keys = list(self.images.keys())
+                    if np.any(batch_images) == None or np.any(batch_labels) == None:
+                        train_data_gen.reset()
+                        break
 
-                    for d_idx in range(0, len(keys)):
-                        img = self.images.get('images_{}'.format(d_idx))
-                        lb = self.labels.get('labels_{}'.format(d_idx))
+                    _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
 
-                        for batch_idx in range(0, img.shape[0] // self.batch_size):
-                            if d_idx == len(keys) - 1 and batch_idx == img.shape[0] // self.batch_size - 1:
-                                batch_images = img[idx : img.shape[0]] / 255.
-                                batch_labels = lb[idx : lb.shape[0]]
-                            else:
-                                batch_images = img[idx : idx+self.batch_size] / 255.
-                                batch_labels = lb[idx : idx+self.batch_size]
-
-                            _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
-
-                            self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
-                            print('Epoch {:>2}, '.format(epoch + 1), end='')
-                            self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
-
-                            idx += self.batch_size
-                else:
-                    for batch_idx in range(0, len(self.paths) // self.batch_size  + 1):
-                        if batch_idx == len(self.paths) // self.batch_size + 1:
-                            batch_images = self.read_images(self.paths[idx : len(self.paths)]) / 255.
-                            batch_labels = self.one_hot(self.paths[idx : len(self.paths)])
-                        else:
-                            batch_images = self.read_images(self.paths[idx : idx+self.batch_size]) / 255.
-                            batch_labels = self.one_hot(self.paths[idx : idx+self.batch_size])
-
-                        _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
-
-                        self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
-                        print('Epoch {:>2}, '.format(epoch + 1), end='')
-                        self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
-
-                        idx += self.batch_size
-                break
+                    self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
+                    print('Epoch {:>2}, '.format(epoch + 1), end='')
+                    self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
