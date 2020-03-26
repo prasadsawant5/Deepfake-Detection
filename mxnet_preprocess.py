@@ -30,8 +30,8 @@ def write_frames(d):
 
                 if ret:
                     if not os.path.exists(os.path.join(REC, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
-                        # cv2.imwrite(os.path.join(REC, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
-                        print('{}_{}.jpeg missing from FAKE'.format(k.split('.')[0], frame_no))
+                        cv2.imwrite(os.path.join(REC, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
+                        # print('{}_{}.jpeg missing from FAKE'.format(k.split('.')[0], frame_no))
                         frame_no += 1
                 else:
                     break
@@ -46,8 +46,8 @@ def write_frames(d):
 
                 if ret:
                     if not os.path.exists(os.path.join(REC, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
-                        # cv2.imwrite(os.path.join(REC, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
-                        print('{}_{}.jpeg missing from REAL'.format(k.split('.')[0], frame_no))
+                        cv2.imwrite(os.path.join(REC, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
+                        # print('{}_{}.jpeg missing from REAL'.format(k.split('.')[0], frame_no))
                         frame_no += 1
                 else:
                     break

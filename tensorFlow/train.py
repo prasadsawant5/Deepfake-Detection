@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from tensorFlow.architectures.my_model import MyModel
 from random import shuffle
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
 
 IMG_WIDTH = 384
@@ -26,10 +26,10 @@ f_id = 0
 
 class TfTrain:
     def __init__(self):
-        self.epochs = 10
+        self.epochs = 1
         self.learning_rate = 1e-4
         self.batch_size = 32
-        self.kp = 0.7
+        self.kp = 0.3
 
         self.images = None
         self.labels = None
@@ -121,19 +121,15 @@ class TfTrain:
 
     def train(self):
         # Remove previous weights, bias, inputs, etc..
-        tf.compat.v1.reset_default_graph()
+        # tf.compat.v1.reset_default_graph()
 
-        tf.compat.v1.disable_eager_execution()
+        # tf.compat.v1.disable_eager_execution()
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        tf.config.experimental.set_memory_growth(gpus[0], True)
+        tf.keras.backend.clear_session()
 
-        # config = tf.compat.v1.ConfigProto()
-        # config.gpu_options.allow_growth = True
-
-        # gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.333)
-        
-        # total_train = len(os.listdir(FAKE)) + len(os.listdir(REAL))
-        # gpus = tf.config.experimental.list_physical_devices('GPU')
-        # for gpu in gpus:
-        #     tf.config.experimental.set_memory_growth(gpu, True)
+        config = tf.compat.v1.ConfigProto()
+        config.gpu_options.allow_growth = True
 
         train_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our training data
         train_data_gen = train_image_generator.flow_from_directory(batch_size=self.batch_size,
@@ -173,40 +169,84 @@ class TfTrain:
 
 
         # Inputs
-        x = self.neural_net_input()
-        y = self.neural_net_output()
-        keep_prob = self.neural_net_keep_prob()
+        # x = self.neural_net_input()
+        # y = self.neural_net_output()
+        # keep_prob = self.neural_net_keep_prob()
+        x = tf.keras.Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3))
 
         # Model
         my_model = MyModel()
-        logits = my_model.model(x, keep_prob)
+        model = my_model.model(x, self.kp)
+        model.summary()
 
         # Name logits Tensor, so that is can be loaded from disk after training
-        logits = tf.identity(logits, name='logits')
+        # logits = tf.identity(logits, name='logits')
 
         # # Loss and Optimizer
-        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
-        optimizer = tf.compat.v1.train.AdamOptimizer().minimize(cost)
+        # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
+        # optimizer = tf.compat.v1.train.AdamOptimizer().minimize(cost)
+        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+        optimizer = tf.keras.optimizers.Adam(self.learning_rate)
 
         # # Accuracy
-        correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
+        # correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
+        # accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
+        train_acc_metric = tf.keras.metrics.CategoricalCrossentropy()
 
-        with tf.compat.v1.Session(config=None) as sess:
-            # Initializing the variables
-            sess.run(tf.compat.v1.global_variables_initializer())
-            sess.run(tf.compat.v1.local_variables_initializer())
+        for epoch in range(self.epochs):
+            while True:
+                batch_images, batch_labels = train_data_gen.next()
 
-            for epoch in range(0, self.epochs):
-                while True:
-                    batch_images, batch_labels = train_data_gen.next()
+                if np.any(batch_images) == None or np.any(batch_labels) == None:
+                    train_data_gen.reset()
+                    break
 
-                    if np.any(batch_images) == None or np.any(batch_labels) == None:
-                        train_data_gen.reset()
-                        break
+                # Open a GradientTape to record the operations run
+                # during the forward pass, which enables autodifferentiation.
+                with tf.GradientTape() as tape:
+                    # Run the forward pass of the layer.
+                    # The operations that the layer applies
+                    # to its inputs are going to be recorded
+                    # on the GradientTape.
+                    logits = model(batch_images, training=True)  # Logits for this minibatch
 
-                    _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
+                    # Compute the loss value for this minibatch.
+                    loss_value = loss(batch_labels, logits)
 
-                    self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
-                    print('Epoch {:>2}, '.format(epoch + 1), end='')
-                    self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
+                # Use the gradient tape to automatically retrieve
+                # the gradients of the trainable variables with respect to the loss.
+                grads = tape.gradient(loss_value, model.trainable_weights)
+
+                # Run one step of gradient descent by updating
+                # the value of the variables to minimize the loss.
+                optimizer.apply_gradients(zip(grads, model.trainable_weights))
+
+                # Update training metric.
+                train_acc_metric(batch_labels, logits)
+
+                train_acc = train_acc_metric.result()
+
+                print('Epoch {:>2}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
+
+            # Reset training metrics at the end of each epoch
+            train_acc_metric.reset_states()
+
+
+        # with tf.compat.v1.Session(config=config) as sess:
+        #     # Initializing the variables
+        #     sess.run(tf.compat.v1.global_variables_initializer())
+        #     sess.run(tf.compat.v1.local_variables_initializer())
+
+        #     for epoch in range(0, self.epochs):
+        #         while True:
+        #             batch_images, batch_labels = train_data_gen.next()
+
+        #             if np.any(batch_images) == None or np.any(batch_labels) == None:
+        #                 train_data_gen.reset()
+        #                 break
+
+        #             _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
+
+        #             self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
+        #             print('Epoch {:>2}, '.format(epoch + 1), end='')
+        #             self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)

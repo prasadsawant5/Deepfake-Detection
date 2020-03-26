@@ -5,6 +5,7 @@ import json
 from tqdm import tqdm
 import multiprocessing
 import threading
+from random import shuffle
 
 DATA = './data'
 METADATA = 'metadata.json'
@@ -76,15 +77,40 @@ def remove_images(directory):
         if np.all(img) == None or os.stat(os.path.join(directory, d)).st_size == 0:
             os.remove(os.path.join(directory, d))
 
+def balance_classes():
+    real = os.listdir(REAL)
+    fake = os.listdir(FAKE)
+
+    if len(real) > len(fake):
+        shuffle(real)
+
+        for i in tqdm(range(0, len(real) - len(fake))):
+            if os.path.exists(os.path.join(REAL, real[i])):
+                try:
+                    os.remove(os.path.join(REAL, real[i]))
+                except OSError as e:
+                    print(e)
+    elif len(real) < len(fake):
+        shuffle(fake)
+
+        for i in tqdm(range(0, len(fake) - len(real))):
+            if os.path.exists(os.path.join(FAKE, fake[i])):
+                try:
+                    os.remove(os.path.join(FAKE, fake[i]))
+                except OSError as e:
+                    print(e)
+
+
 if __name__ == '__main__':
-    t0 = threading.Thread(target=remove_images, args=(FAKE,))
-    t1 = threading.Thread(target=remove_images, args=(REAL,))
+    # t0 = threading.Thread(target=remove_images, args=(FAKE,))
+    # t1 = threading.Thread(target=remove_images, args=(REAL,))
 
-    t0.start()
-    t1.start()
+    # t0.start()
+    # t1.start()
 
-    t0.join()
-    t1.join()
+    # t0.join()
+    # t1.join()
+    balance_classes()
     # processes = []
 
     # for d in os.listdir(DATA):
