@@ -124,8 +124,8 @@ class TfTrain:
         # tf.compat.v1.reset_default_graph()
 
         # tf.compat.v1.disable_eager_execution()
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        tf.config.experimental.set_memory_growth(gpus[0], True)
+        # gpus = tf.config.experimental.list_physical_devices('GPU')
+        # tf.config.experimental.set_memory_growth(gpus[0], True)
         tf.keras.backend.clear_session()
 
         config = tf.compat.v1.ConfigProto()
