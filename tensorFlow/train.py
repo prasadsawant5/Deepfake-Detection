@@ -18,9 +18,9 @@ IMG_HEIGHT = 384
 H5_IMAGES = os.path.join(os.path.dirname(__file__), '../images.h5')
 H5_LABELS = os.path.join(os.path.dirname(__file__), '../labels.h5')
 
-DIR = os.path.join(os.path.dirname(__file__), '../rec')
-FAKE = os.path.join(os.path.dirname(__file__), '../rec/fake')
-REAL = os.path.join(os.path.dirname(__file__), '../rec/real')
+DIR = os.path.join(os.path.dirname(__file__), '../images')
+FAKE = os.path.join(os.path.dirname(__file__), '../images/fake')
+REAL = os.path.join(os.path.dirname(__file__), '../images/real')
 
 f_id = 0
 
@@ -28,7 +28,7 @@ class TfTrain:
     def __init__(self):
         self.epochs = 1
         self.learning_rate = 1e-4
-        self.batch_size = 32
+        self.batch_size = 2
         self.kp = 0.3
 
         self.images = None
@@ -128,8 +128,8 @@ class TfTrain:
         # tf.config.experimental.set_memory_growth(gpus[0], True)
         tf.keras.backend.clear_session()
 
-        config = tf.compat.v1.ConfigProto()
-        config.gpu_options.allow_growth = True
+        # config = tf.compat.v1.ConfigProto()
+        # config.gpu_options.allow_growth = True
 
         train_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our training data
         train_data_gen = train_image_generator.flow_from_directory(batch_size=self.batch_size,
@@ -226,7 +226,7 @@ class TfTrain:
 
                 train_acc = train_acc_metric.result()
 
-                print('Epoch {:>2}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
+                print('Epoch {:03d}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
 
             # Reset training metrics at the end of each epoch
             train_acc_metric.reset_states()

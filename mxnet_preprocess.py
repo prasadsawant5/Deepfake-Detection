@@ -11,8 +11,16 @@ DATA = './data'
 REC = './rec'
 CLASSES = ['real', 'fake']
 METADATA = 'metadata.json'
+IMAGES = './images'
 
 def write_frames(d):
+    if not os.path.exists(IMAGES):
+        os.mkdir(IMAGES)
+
+    for c in CLASSES:
+        if not os.path.exists(os.path.join(IMAGES, c)):
+            os.mkdir(os.path.join(IMAGES, c))
+    
     with open(os.path.join(DATA, d, METADATA)) as f:
         meta = json.load(f)
 
@@ -29,8 +37,8 @@ def write_frames(d):
                 ret, frame = cap.read()
 
                 if ret:
-                    if not os.path.exists(os.path.join(REC, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
-                        cv2.imwrite(os.path.join(REC, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
+                    if not os.path.exists(os.path.join(IMAGES, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
+                        cv2.imwrite(os.path.join(IMAGES, CLASSES[-1], k.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
                         # print('{}_{}.jpeg missing from FAKE'.format(k.split('.')[0], frame_no))
                         frame_no += 1
                 else:
@@ -45,8 +53,8 @@ def write_frames(d):
                 ret, frame = cap.read()
 
                 if ret:
-                    if not os.path.exists(os.path.join(REC, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
-                        cv2.imwrite(os.path.join(REC, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
+                    if not os.path.exists(os.path.join(IMAGES, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg')):
+                        cv2.imwrite(os.path.join(IMAGES, CLASSES[0], original.split('.')[0] + '_' + str(frame_no) + '.jpeg'), frame)
                         # print('{}_{}.jpeg missing from REAL'.format(k.split('.')[0], frame_no))
                         frame_no += 1
                 else:
@@ -74,5 +82,5 @@ if __name__ == '__main__':
         process.join()
 
     for c in CLASSES:
-        os.system('python3 im2rec.py ' + os.path.join(REC, c) + '_rec ' + REC + ' --recursive --list --num-thread 8')
-        os.system('python3 im2rec.py ' + os.path.join(REC, c) + '_rec ' + REC + ' --recursive --pass-through --pack-label --num-thread 8')
+        os.system('python3 im2rec.py ' + os.path.join(REC, c) + '_rec ' + IMAGES + ' --recursive --list --num-thread 8')
+        os.system('python3 im2rec.py ' + os.path.join(REC, c) + '_rec ' + IMAGES + ' --recursive --pass-through --pack-label --num-thread 8')

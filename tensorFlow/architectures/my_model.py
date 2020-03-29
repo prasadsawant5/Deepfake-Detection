@@ -92,17 +92,17 @@ class MyModel:
         conv1 = self.conv2d_maxpool(conv0, 64, 'conv1')
         dropout0 = tf.keras.layers.Dropout(kp, name='dropout0')(conv1)
 
-        # conv2 = self.conv2d_maxpool(dropout0, 128, 'conv2')
-        # conv3 = self.conv2d_maxpool(conv2, 256, 'conv3')
-        # dropout2 = tf.keras.layers.Dropout(kp, name='dropout2')(conv2)
+        conv2 = self.conv2d_maxpool(dropout0, 128, 'conv2')
+        conv3 = self.conv2d_maxpool(conv2, 256, 'conv3')
+        dropout2 = tf.keras.layers.Dropout(kp, name='dropout2')(conv2)
 
         # cnn = self.conv2d_maxpool(cnn, 512, 'conv4')
 
-        flatten = self.flatten(dropout0, 'flatten')
+        flatten = self.flatten(dropout2, 'flatten')
 
-        # fully_conn0 = self.fully_conn(flatten, 256, 'fully_conn0')
-        # fully_conn1 = self.fully_conn(fully_conn0, 64, 'fully_conn1')
-        fully_conn2 = self.fully_conn(flatten, 32, 'fully_conn2')
+        fully_conn0 = self.fully_conn(flatten, 32, 'fully_conn0')
+        fully_conn1 = self.fully_conn(fully_conn0, 16, 'fully_conn1')
+        fully_conn2 = self.fully_conn(flatten, 8, 'fully_conn2')
         output = self.output(fully_conn2)
 
         cnn = tf.keras.Model(inputs=x, outputs=output)

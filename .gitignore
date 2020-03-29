@@ -7,3 +7,5 @@ models/*
 test_videos/*
 *.csv
 .idea
+*.zip
+images/*
