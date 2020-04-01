@@ -1,6 +1,6 @@
 import tensorflow as tf
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpus[0], True)
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
 import pdb
 import os
 import cv2
@@ -50,19 +50,19 @@ if __name__ == '__main__':
 
     dropout0 = tf.keras.layers.Dropout(kp, name='dropout0')(max_pool1)
 
-    conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=conv_ksize, strides=conv_strides, 
-                padding=padding, activation=activation, use_bias=True, name='conv2')(dropout0)
-    max_pool2 = tf.keras.layers.MaxPool2D(pool_size=pool_ksize, strides=pool_strides, padding=padding, name='max_pool2')(conv2)
+    # conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=conv_ksize, strides=conv_strides, 
+    #             padding=padding, activation=activation, use_bias=True, name='conv2')(dropout0)
+    # max_pool2 = tf.keras.layers.MaxPool2D(pool_size=pool_ksize, strides=pool_strides, padding=padding, name='max_pool2')(conv2)
 
-    dropout1 = tf.keras.layers.Dropout(kp, name='dropout1')(max_pool2)
+    # dropout1 = tf.keras.layers.Dropout(kp, name='dropout1')(max_pool2)
 
 
-    flatten = tf.keras.layers.Flatten()(dropout1)
+    flatten = tf.keras.layers.Flatten()(dropout0)
 
     fully_conn0 = tf.keras.layers.Dense(units=32, activation=activation, use_bias=True, name='fully_conn0')(flatten)
-    fully_conn1 = tf.keras.layers.Dense(units=16, activation=activation, use_bias=True, name='fully_conn1')(fully_conn0)
+    # fully_conn1 = tf.keras.layers.Dense(units=16, activation=activation, use_bias=True, name='fully_conn1')(fully_conn0)
 
-    output = tf.keras.layers.Dense(units=2, activation=activation, use_bias=True, name='predictions')(fully_conn1)
+    output = tf.keras.layers.Dense(units=2, activation=activation, use_bias=True, name='predictions')(fully_conn0)
 
     model = tf.keras.Model(inputs=x, outputs=output)
     model.summary()
@@ -79,7 +79,7 @@ if __name__ == '__main__':
             batch_images, batch_labels = train_data_gen.next()
 
             # pdb.set_trace()
-            print('Size in MB: {}'.format((batch_images.size * batch_images.itemsize)))
+            # print('Size in MB: {}'.format((batch_images.size * batch_images.itemsize)))
 
             if np.any(batch_images) == None or np.any(batch_labels) == None:
                 train_data_gen.reset()
@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
             train_acc = train_acc_metric.result()
 
-            print('Epoch {:>2}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
+            print('Epoch {:03d}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
 
         # Reset training metrics at the end of each epoch
         train_acc_metric.reset_states()

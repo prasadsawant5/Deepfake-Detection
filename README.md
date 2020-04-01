@@ -37,7 +37,7 @@ Please provided the following arguments to the `run.py` script.
 2. `-m` : Specifies the operation mode. `training` to train a model and `inference` to run inference.
 
 ### TODO
-- [ ] Finish the TensorFlow based training pipeline
+- [ X ] Finish the TensorFlow based training pipeline
 - [ ] Finish inference pipeline for MxNet
 - [ ] Finish inference pipeline for TensorFlow
 - [ ] Train TensorFlow model using quantization so that it can be deployed on Android and iOS devices.

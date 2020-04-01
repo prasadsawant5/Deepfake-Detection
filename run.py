@@ -7,11 +7,14 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument("-f", "--framework", required=True, help="Framework to be used for training, e.g. tf (for TensorFlow) or mx (for mxnet)", default='tf')
     ap.add_argument('-m', '--mode', required=True, help='Specify whether you want to perform training or inference. e.g. -m inference', default='training')
+    ap.add_argument('-s', '--squeeze', required=False, help='Flag for building a SqueezeNet', default=True)
 
     args = vars(ap.parse_args())
 
     if args['framework'] == 'tf':
         tfTrain = TfTrain()
+        if args['squeeze']:
+            tfTrain.set_squeeze(True)
         tfTrain.train()
     elif args['framework'] == 'mx':
         mxNetTrainer = MxNetTrainer()

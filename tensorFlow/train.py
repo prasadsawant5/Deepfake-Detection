@@ -1,4 +1,7 @@
 import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpus[0], True)
+
 import cv2
 import numpy as np
 import os
@@ -7,13 +10,13 @@ import pandas as pd
 import h5py
 from sklearn.model_selection import train_test_split
 from tensorFlow.architectures.my_model import MyModel
+from tensorFlow.architectures.squeeze_net import SqueezeNet
 from random import shuffle
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
 
-IMG_WIDTH = 384
-IMG_HEIGHT = 384
+IMG_WIDTH = 227
+IMG_HEIGHT = 227
 
 H5_IMAGES = os.path.join(os.path.dirname(__file__), '../images.h5')
 H5_LABELS = os.path.join(os.path.dirname(__file__), '../labels.h5')
@@ -28,8 +31,8 @@ class TfTrain:
     def __init__(self):
         self.epochs = 1
         self.learning_rate = 1e-4
-        self.batch_size = 2
-        self.kp = 0.3
+        self.batch_size = 32
+        self.kp = 0.5
 
         self.images = None
         self.labels = None
@@ -37,6 +40,8 @@ class TfTrain:
         self.paths = []
 
         self.is_h5 = False
+
+        self.is_squeeze = False
 
         if os.path.isfile(H5_IMAGES) and os.path.isfile(H5_LABELS):
             self.is_h5 = True
@@ -58,13 +63,17 @@ class TfTrain:
         if not os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow'))):
             os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow')))
 
-        self.save_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow'))
-    
-    def neural_net_input(self):
-        return tf.compat.v1.placeholder(tf.float32, (None, IMG_HEIGHT, IMG_WIDTH, 3), name='X')
+        if not os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs', 'tensorflow'))):
+            os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs', 'tensorflow')))
 
-    def neural_net_output(self, n_classes=2):
-        return tf.compat.v1.placeholder(tf.float32, (None, n_classes), name='y')
+        self.save_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'models', 'tensorflow'))
+        self.tensorboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs', 'tensorflow'))
+    
+    def set_squeeze(self, flag):
+        self.is_squeeze = flag
+
+    def get_squeeze(self):
+        return self.is_squeeze
 
     def neural_net_keep_prob(self):
         return tf.compat.v1.placeholder(tf.float32, None, 'keep_prob')
@@ -120,16 +129,7 @@ class TfTrain:
 
 
     def train(self):
-        # Remove previous weights, bias, inputs, etc..
-        # tf.compat.v1.reset_default_graph()
-
-        # tf.compat.v1.disable_eager_execution()
-        # gpus = tf.config.experimental.list_physical_devices('GPU')
-        # tf.config.experimental.set_memory_growth(gpus[0], True)
         tf.keras.backend.clear_session()
-
-        # config = tf.compat.v1.ConfigProto()
-        # config.gpu_options.allow_growth = True
 
         train_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our training data
         train_data_gen = train_image_generator.flow_from_directory(batch_size=self.batch_size,
@@ -138,64 +138,36 @@ class TfTrain:
                                                            target_size=(IMG_HEIGHT, IMG_WIDTH),
                                                            class_mode='categorical')
 
-        # model = Sequential([
-        #     Conv2D(32, 3, padding='same', activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH ,3)),
-        #     MaxPooling2D(),
-        #     Conv2D(64, 3, padding='same', activation='relu'),
-        #     MaxPooling2D(),
-        #     Conv2D(128, 3, padding='same', activation='relu'),
-        #     MaxPooling2D(),
-        #     Flatten(),
-        #     Dense(256, activation='relu'),
-        #     Dense(64, activation='relu'),
-        #     Dense(32, activation='relu'),
-        #     Dense(1)
-        # ])
-
-        # model.compile(optimizer='adam',
-        #       loss=tf.keras.losses.BinaryCrossentropy(from_logits=True),
-        #       metrics=['accuracy'])
-
-        # history = model.fit_generator(
-        #     train_data_gen,
-        #     steps_per_epoch=total_train // self.batch_size,
-        #     epochs=self.epochs
-        # )
-
-        # acc = history.history['accuracy']
-        # loss=history.history['loss']
-
-        # print('Accuracy: {:.6f}, Loss: {:.6f}'.format(acc, loss))
-
 
         # Inputs
-        # x = self.neural_net_input()
-        # y = self.neural_net_output()
-        # keep_prob = self.neural_net_keep_prob()
         x = tf.keras.Input(shape=(IMG_WIDTH, IMG_HEIGHT, 3))
 
         # Model
-        my_model = MyModel()
-        model = my_model.model(x, self.kp)
+        model = None
+
+        if self.get_squeeze():
+            squeeze_net = SqueezeNet()
+            model = squeeze_net.model(x, self.kp)
+        else:
+            my_model = MyModel()
+            model = my_model.model(x, self.kp)
+        
         model.summary()
 
-        # Name logits Tensor, so that is can be loaded from disk after training
-        # logits = tf.identity(logits, name='logits')
-
         # # Loss and Optimizer
-        # cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
-        # optimizer = tf.compat.v1.train.AdamOptimizer().minimize(cost)
         loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
         optimizer = tf.keras.optimizers.Adam(self.learning_rate)
 
         # # Accuracy
-        # correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
-        # accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32), name='accuracy')
         train_acc_metric = tf.keras.metrics.CategoricalCrossentropy()
 
+        tensorboard_cbk = tf.keras.callbacks.TensorBoard(log_dir = self.tensorboard_path, write_graph=True, write_images=True, histogram_freq=0)
+        tensorboard_cbk.set_model(model)
+
         for epoch in range(self.epochs):
-            while True:
-                batch_images, batch_labels = train_data_gen.next()
+            for step, (batch_images, batch_labels) in enumerate(train_data_gen):
+            # while True:
+                # batch_images, batch_labels = train_data_gen.next()
 
                 if np.any(batch_images) == None or np.any(batch_labels) == None:
                     train_data_gen.reset()
@@ -226,27 +198,9 @@ class TfTrain:
 
                 train_acc = train_acc_metric.result()
 
-                print('Epoch {:03d}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, train_acc, loss_value))
+                print('Epoch {:03d}, Step: {:06d} Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, step, train_acc, loss_value))
 
             # Reset training metrics at the end of each epoch
             train_acc_metric.reset_states()
 
-
-        # with tf.compat.v1.Session(config=config) as sess:
-        #     # Initializing the variables
-        #     sess.run(tf.compat.v1.global_variables_initializer())
-        #     sess.run(tf.compat.v1.local_variables_initializer())
-
-        #     for epoch in range(0, self.epochs):
-        #         while True:
-        #             batch_images, batch_labels = train_data_gen.next()
-
-        #             if np.any(batch_images) == None or np.any(batch_labels) == None:
-        #                 train_data_gen.reset()
-        #                 break
-
-        #             _, X_val, _, y_val = train_test_split(batch_images, batch_labels, test_size=0.3)
-
-        #             self.train_neural_network(sess, optimizer, x, y, keep_prob, self.kp, batch_images, batch_labels)
-        #             print('Epoch {:>2}, '.format(epoch + 1), end='')
-        #             self.print_stats(sess, x, y, keep_prob, batch_images, batch_labels, X_val, y_val, cost, accuracy)
+        model.save(self.save_path)
