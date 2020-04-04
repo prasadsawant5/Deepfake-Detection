@@ -5,26 +5,36 @@ class SqueezeNet:
         pass
 
     def conv2d_maxpool(self, x_tensor, conv_num_outputs, scope_name, conv_ksize=7, 
-        conv_strides=(2,2), pool_ksize=3, pool_strides=(2,2), padding='VALID', activation='relu'):
+        conv_strides=(2,2), pool_ksize=3, pool_strides=(2,2), padding='VALID', activation=None):
         with tf.name_scope(scope_name):
             conv_layer = tf.keras.layers.Conv2D(filters=conv_num_outputs, kernel_size=conv_ksize, strides=conv_strides, 
                 padding=padding, activation=activation, use_bias=True)(x_tensor)
+
+            if activation == None:
+                conv_layer = tf.keras.layers.LeakyReLU()(conv_layer)
 
             conv_layer = tf.keras.layers.MaxPool2D(pool_size=pool_ksize, strides=pool_strides, padding=padding)(conv_layer)
             
             return conv_layer
 
     def fire_module(self, x_tensor, squeeze_filters, expand_filters, scope_name,  
-        conv_strides=(1,1), pool_ksize=5, pool_strides=(1,1), padding='VALID', activation='relu'):
+        conv_strides=(1,1), pool_ksize=5, pool_strides=(1,1), padding='VALID', activation=None):
         with tf.name_scope(scope_name):
             squeeze1x1 = tf.keras.layers.Conv2D(filters=squeeze_filters, kernel_size=1, strides=conv_strides, 
                 padding=padding, activation=activation, use_bias=True)(x_tensor)
 
+            if activation == None:
+                squeeze1x1 = tf.keras.layers.LeakyReLU()(squeeze1x1)
+
             expand1x1 = tf.keras.layers.Conv2D(filters=expand_filters, kernel_size=1, strides=conv_strides, 
                 padding=padding, activation=activation, use_bias=True)(squeeze1x1)
 
+            expand1x1 = tf.keras.layers.LeakyReLU()(expand1x1)
+
             expand3x3 = tf.keras.layers.Conv2D(filters=expand_filters, kernel_size=3, strides=conv_strides, 
                 padding='SAME', activation=activation, use_bias=True)(squeeze1x1)
+
+            expand3x3 = tf.keras.layers.LeakyReLU()(expand3x3)
 
             output = tf.keras.layers.Concatenate()([expand1x1, expand3x3])
 

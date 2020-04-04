@@ -10,8 +10,10 @@ from random import shuffle
 DATA = './data'
 METADATA = 'metadata.json'
 
-FAKE = './rec/fake'
-REAL = './rec/real'
+FAKE = './images/fake'
+REAL = './images/real'
+
+CAP = 50000
 
 def read_frames(d):
     total_frames = 0
@@ -100,6 +102,14 @@ def balance_classes():
                 except OSError as e:
                     print(e)
 
+def reduce_dataset():
+    real = os.listdir(REAL)
+    fake = os.listdir(FAKE)
+
+    for i in tqdm(range(CAP + 1, len(real))):
+        os.remove(os.path.join(REAL, real[i]))
+        os.remove(os.path.join(FAKE, fake[i]))
+
 
 if __name__ == '__main__':
     # t0 = threading.Thread(target=remove_images, args=(FAKE,))
@@ -110,7 +120,7 @@ if __name__ == '__main__':
 
     # t0.join()
     # t1.join()
-    balance_classes()
+    reduce_dataset()
     # processes = []
 
     # for d in os.listdir(DATA):

@@ -11,6 +11,8 @@ import h5py
 from sklearn.model_selection import train_test_split
 from tensorFlow.architectures.my_model import MyModel
 from tensorFlow.architectures.squeeze_net import SqueezeNet
+from tensorFlow.util.grad_cam import GradCam
+from tensorFlow.callbacks.grad_cam_callback import GradCamCallback
 from random import shuffle
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Model
@@ -29,7 +31,7 @@ f_id = 0
 
 class TfTrain:
     def __init__(self):
-        self.epochs = 1
+        self.epochs = 10
         self.learning_rate = 1e-4
         self.batch_size = 32
         self.kp = 0.5
@@ -74,36 +76,6 @@ class TfTrain:
 
     def get_squeeze(self):
         return self.is_squeeze
-
-    def neural_net_keep_prob(self):
-        return tf.compat.v1.placeholder(tf.float32, None, 'keep_prob')
-
-    def train_neural_network(self, session, optimizer, x, y, keep_prob, keep_probability, feature_batch, label_batch):
-        """
-        Optimize the session on a batch of images and labels
-        : session: Current TensorFlow session
-        : optimizer: TensorFlow optimizer function
-        : keep_probability: keep probability
-        : feature_batch: Batch of Numpy image data
-        : label_batch: Batch of Numpy label data
-        """
-        session.run(optimizer, feed_dict={x:feature_batch, y:label_batch, keep_prob:keep_probability})
-
-    def print_stats(self, sess, x, y, keep_prob, feature_batch, label_batch, valid_features, valid_labels, cost, accuracy):
-        """
-        Print information about loss and validation accuracy
-        : session: Current TensorFlow session
-        : feature_batch: Batch of Numpy image data
-        : label_batch: Batch of Numpy label data
-        : cost: TensorFlow cost function
-        : accuracy: TensorFlow accuracy function
-        """
-        loss = sess.run(cost, feed_dict={x:feature_batch, y:label_batch, keep_prob:1.0})
-        valid_acc = sess.run(accuracy, feed_dict={
-                    x: valid_features,
-                    y: valid_labels,
-                    keep_prob: 1.})
-        print('Loss: {:>10.4f}, Val Acc: {:.6f}'.format(loss, valid_acc))
 
     def one_hot(self, paths, n_classes = 2):
         arr = np.zeros((len(paths), n_classes))
@@ -154,20 +126,25 @@ class TfTrain:
         
         model.summary()
 
-        # # Loss and Optimizer
+        # Loss and Optimizer
         loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
         optimizer = tf.keras.optimizers.Adam(self.learning_rate)
 
-        # # Accuracy
-        train_acc_metric = tf.keras.metrics.CategoricalCrossentropy()
+        # Accuracy
+        train_acc_metric = tf.keras.metrics.CategoricalAccuracy()
+        file_writer = tf.summary.create_file_writer(self.tensorboard_path)
 
         tensorboard_cbk = tf.keras.callbacks.TensorBoard(log_dir = self.tensorboard_path, write_graph=True, write_images=True, histogram_freq=0)
         tensorboard_cbk.set_model(model)
 
+        # model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+
+        # model.fit(train_data_gen, epochs=self.epochs, callbacks=[tensorboard_cbk])
+
         for epoch in range(self.epochs):
+            tb_img = None
+            tb_label = None
             for step, (batch_images, batch_labels) in enumerate(train_data_gen):
-            # while True:
-                # batch_images, batch_labels = train_data_gen.next()
 
                 if np.any(batch_images) == None or np.any(batch_labels) == None:
                     train_data_gen.reset()
@@ -198,9 +175,34 @@ class TfTrain:
 
                 train_acc = train_acc_metric.result()
 
-                print('Epoch {:03d}, Step: {:06d} Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, step, train_acc, loss_value))
+                print('Epoch {:03d}, Step: {:06d}, Accuracy: {:6f}, Loss: {:6f}'.format(epoch + 1, step, train_acc, loss_value))
+
+                tb_img = batch_images[0]
+                tb_label = batch_labels[0]
+                    
+
+                if batch_images.shape[0] != self.batch_size:
+                    train_data_gen.reset()
+                    break
+
 
             # Reset training metrics at the end of each epoch
             train_acc_metric.reset_states()
+
+            with file_writer.as_default():
+                image = tf.keras.preprocessing.image.img_to_array(tb_img)
+                image = np.expand_dims(image, axis=0)
+                cam = GradCam(model=model, classIdx= 0 if tb_label[0] == 1. else 1)
+                heatmap = cam.compute_heatmap(image)
+                img = (image[0] * 255).astype('uint8')
+                tf.summary.image('Input Image', image, epoch)
+
+                (heatmap, output) = cam.overlay_heatmap(heatmap, img, alpha=0.5)
+                
+                output = np.vstack([img, heatmap, output])
+                output = tf.keras.preprocessing.image.img_to_array(output)
+                output = np.expand_dims(output, axis=0)
+                
+                tf.summary.image('Input Image -- GradCAM', output, epoch)
 
         model.save(self.save_path)
