@@ -30,7 +30,7 @@ REAL = os.path.join(os.path.dirname(__file__), '../images/real')
 f_id = 0
 
 class TfTrain:
-    def __init__(self):
+    def __init__(self, is_resume):
         self.epochs = 10
         self.learning_rate = 1e-4
         self.batch_size = 32
@@ -38,6 +38,8 @@ class TfTrain:
 
         self.images = None
         self.labels = None
+
+        self.is_resume = is_resume
 
         self.paths = []
 
@@ -117,12 +119,15 @@ class TfTrain:
         # Model
         model = None
 
-        if self.get_squeeze():
-            squeeze_net = SqueezeNet()
-            model = squeeze_net.model(x, self.kp)
+        if self.is_resume:
+            model = tf.keras.models.load_model(self.save_path)
         else:
-            my_model = MyModel()
-            model = my_model.model(x, self.kp)
+            if self.get_squeeze():
+                squeeze_net = SqueezeNet()
+                model = squeeze_net.model(x, self.kp)
+            else:
+                my_model = MyModel()
+                model = my_model.model(x, self.kp)
         
         model.summary()
 
@@ -190,7 +195,6 @@ class TfTrain:
             train_acc_metric.reset_states()
 
             with file_writer.as_default():
-                image = tf.keras.preprocessing.image.img_to_array(tb_img)
                 image = np.expand_dims(image, axis=0)
                 cam = GradCam(model=model, classIdx= 0 if tb_label[0] == 1. else 1)
                 heatmap = cam.compute_heatmap(image)
@@ -198,9 +202,7 @@ class TfTrain:
                 tf.summary.image('Input Image', image, epoch)
 
                 (heatmap, output) = cam.overlay_heatmap(heatmap, img, alpha=0.5)
-                
-                output = np.vstack([img, heatmap, output])
-                output = tf.keras.preprocessing.image.img_to_array(output)
+
                 output = np.expand_dims(output, axis=0)
                 
                 tf.summary.image('Input Image -- GradCAM', output, epoch)

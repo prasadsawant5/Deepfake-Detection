@@ -8,7 +8,7 @@ class SqueezeNet:
         conv_strides=(2,2), pool_ksize=3, pool_strides=(2,2), padding='VALID', activation=None):
         with tf.name_scope(scope_name):
             conv_layer = tf.keras.layers.Conv2D(filters=conv_num_outputs, kernel_size=conv_ksize, strides=conv_strides, 
-                padding=padding, activation=activation, use_bias=True)(x_tensor)
+                padding=padding, activation=activation, use_bias=True, kernel_initializer=None)(x_tensor)
 
             if activation == None:
                 conv_layer = tf.keras.layers.LeakyReLU()(conv_layer)
@@ -21,24 +21,22 @@ class SqueezeNet:
         conv_strides=(1,1), pool_ksize=5, pool_strides=(1,1), padding='VALID', activation=None):
         with tf.name_scope(scope_name):
             squeeze1x1 = tf.keras.layers.Conv2D(filters=squeeze_filters, kernel_size=1, strides=conv_strides, 
-                padding=padding, activation=activation, use_bias=True)(x_tensor)
+                padding=padding, activation=activation, use_bias=True, kernel_initializer=None)(x_tensor)
 
             if activation == None:
                 squeeze1x1 = tf.keras.layers.LeakyReLU()(squeeze1x1)
 
             expand1x1 = tf.keras.layers.Conv2D(filters=expand_filters, kernel_size=1, strides=conv_strides, 
-                padding=padding, activation=activation, use_bias=True)(squeeze1x1)
+                padding=padding, activation=activation, use_bias=True, kernel_initializer=None)(squeeze1x1)
 
             expand1x1 = tf.keras.layers.LeakyReLU()(expand1x1)
 
             expand3x3 = tf.keras.layers.Conv2D(filters=expand_filters, kernel_size=3, strides=conv_strides, 
-                padding='SAME', activation=activation, use_bias=True)(squeeze1x1)
+                padding='SAME', activation=activation, use_bias=True, kernel_initializer=None)(squeeze1x1)
 
             expand3x3 = tf.keras.layers.LeakyReLU()(expand3x3)
 
             output = tf.keras.layers.Concatenate()([expand1x1, expand3x3])
-
-            print('output' + str(output.get_shape().as_list()))
             
             return output
 
@@ -51,12 +49,13 @@ class SqueezeNet:
 
     def output(self, x_tensor, scope_name='output', filters=2, conv_ksize=1, conv_strides=(1,1), padding='VALID', 
         activation='relu', pool_ksize=13, pool_strides=(1,1)):
-        conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=conv_ksize, 
-            strides=conv_strides, padding=padding, activation=activation, use_bias=True)(x_tensor)
+        with tf.name_scope(scope_name):
+            conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=conv_ksize, 
+                strides=conv_strides, padding=padding, activation=activation, use_bias=True, kernel_initializer=None)(x_tensor)
 
-        output = tf.keras.layers.AveragePooling2D(pool_size=pool_ksize, strides=None, padding=padding)(conv)
+            output = tf.keras.layers.AveragePooling2D(pool_size=pool_ksize, strides=None, padding=padding)(conv)
 
-        return tf.keras.layers.Flatten(name='predictions')(output)
+            return tf.keras.layers.Flatten(name='predictions')(output)
 
     def model(self, x, kp):
         conv0 = self.conv2d_maxpool(x, 96, 'conv0')
